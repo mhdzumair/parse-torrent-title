@@ -5,35 +5,51 @@
 delimiters = "[\.\s\-\+_\/(),]"
 
 langs = [
-    ("rus(?:sian)?", "Russian"),
-    ("(?:True)?fre?(?:nch)?", "French"),
+    ("rus(?:sian)?|russo", "Russian"),
+    ("(?:True)?fre?(?:nch)?|fr(?:ench|a|e|anc[eê]s)?", "French"),
     ("(?:nu)?ita(?:liano?)?", "Italian"),
     ("castellano|spa(?:nish)?|esp?", "Spanish"),
     ("swedish", "Swedish"),
     ("dk|dan(?:ish)?", "Danish"),
-    ("ger(?:man)?|deu(?:tsch)?", "German"),
+    ("ger(?:man)?|deu(?:tsch)?|alem[aã]o", "German"),
     ("nordic", "Nordic"),
     ("exyu", "ExYu"),
-    ("chs|chi(?:nese)?", "Chinese"),
+    ("chs|chi(?:nese)?|(?:mand[ae]rin|ch[sn])|chin[eê]s|zh-hans", "Chinese"),
     ("hin(?:di)?", "Hindi"),
     ("polish|poland|pl", "Polish"),
-    ("mandarin", "Mandarin"),
-    ("kor(?:ean)?", "Korean"),
+    ("kor(?:ean)?|coreano", "Korean"),
     ("ben(?:gali)?|bangla", "Bengali"),
     ("kan(?:nada)?", "Kannada"),
-    ("tam(?:il)?", "Tamil"),
+    ("t[aâ]m(?:il)?", "Tamil"),
     ("tel(?:ugu)?", "Telugu"),
     ("mar(?:athi)?", "Marathi"),
     ("mal(?:ayalam)?", "Malayalam"),
-    ("japanese|ja?p", "Japanese"),
+    ("guj(?:arati)?", "Gujarati"),
+    ("pun(?:jabi)?", "Punjabi"),
+    ("ori(?:ya)?", "Oriya"),
+    ("japanese|ja?p|jpn|japon[eê]s", "Japanese"),
     ("interslavic", "Interslavic"),
     ("ara(?:bic)?", "Arabic"),
     ("urdu", "Urdu"),
-    ("punjabi", "Punjabi"),
-    ("portuguese", "Portuguese"),
-    ("albanian?", "Albanian"),
-    ("egypt(?:ian)?", "Egyptian"),
-    ("en?(?:g(?:lish)?)?", "English"),  # Must be at end, matches just an 'e'
+    ("tur(?:kish)?|tr", "Turkish"),
+    ("tailand[eê]s|thai?", "Thai"),
+    ("tagalog", "Tagalog"),
+    ("ind(?:onesian)?", "Indonesian"),
+    ("vie(?:tnamese)?", "Vietnamese"),
+    ("heb(?:rew)?", "Hebrew"),
+    ("gre(?:ek)?", "Greek"),
+    ("cz(?:ech)?", "Czech"),
+    ("hun(?:garian)?", "Hungarian"),
+    ("ukr(?:ainian)?", "Ukrainian"),
+    ("fin(?:nish)?", "Finnish"),
+    ("nor(?:wegian)?", "Norwegian"),
+    ("sin(?:hala)?", "Sinhala"),
+    ("dutch|nl", "Dutch"),
+    ("p[ua]n(?:jabi)?", "Punjabi"),
+    ("por(?:tuguese)?|portugu[eèê]s[ea]?|p[rt]|port?", "Portuguese"),
+    ("alb(?:anian?)?|albanais", "Albanian"),
+    ("egypt(?:ian)?|egy", "Egyptian"),
+    ("en?(?:g(?:lish)?)?|ing(?:l[eéê]s)?", "English"),  # Must be at end, matches just an 'e'
 ]
 
 genres = [
@@ -87,7 +103,6 @@ patterns_ignore_title = {
     "proper": [],
     "extended": [r"(EXTENDED{d}(?!(?:CUT|EDITIONS?)))".format(d=delimiters)],
 }
-
 
 channels = [(1, 0), (2, 0), (5, 0), (5, 1), (6, 1), (7, 1)]
 
@@ -182,12 +197,12 @@ def link_patterns(pattern_options):
     return (
         "(?:"
         + "|".join(
-            [
-                pattern_option[0]
-                if isinstance(pattern_option, tuple)
-                else pattern_option
-                for pattern_option in pattern_options
-            ]
-        )
+        [
+            pattern_option[0]
+            if isinstance(pattern_option, tuple)
+            else pattern_option
+            for pattern_option in pattern_options
+        ]
+    )
         + ")"
     )

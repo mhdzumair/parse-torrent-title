@@ -3715,5 +3715,83 @@
     "resolution": "1080p",
     "title": "The Lord of the Rings",
     "year": 2001
+  },
+  {
+    "audio": "DTS",
+    "encoder": "3xEng",
+    "language": ["Rus","Ukr"],
+    "quality": "BluRay",
+    "resolution": "1080p",
+    "site": "HDCL",
+    "title": "Deadpool",
+    "year": 2016
+  },
+  {
+    "audio": "AC3",
+    "codec": "XViD",
+    "encoder": "DVDFR",
+    "language": "FRENCH",
+    "quality": "DVDRip",
+    "title": "127 Heures"
+  },
+  {
+    "language": ["inglês","português"],
+    "title": "Men in Black International",
+    "year": 2019
+  },
+  {
+    "codec": "XviD",
+    "language": "PL",
+    "quality": "DVDRiP",
+    "site": "Arx",
+    "title": "Quarantine",
+    "year": 2008
+  },
+  {
+    "codec": "XViD",
+    "encoder": "DeBTV",
+    "episode": 146,
+    "language": "KOR",
+    "quality": "HDTV",
+    "title": "All Love"
+  },
+  {
+    "codec": "x264",
+    "encoder": "VXTT",
+    "language": "KOREAN",
+    "quality": "WEBRip",
+    "resolution": "1080p",
+    "subtitles": "ENSUBBED",
+    "title": "Atonement",
+    "year": 2017
+  },
+  {
+    "audio": "DD5.1",
+    "codec": "x264",
+    "encoder": "TrollHD",
+    "language": "HEBREW",
+    "network": "NF",
+    "quality": "WEBRip",
+    "resolution": "1080p",
+    "season": 1,
+    "site": "rartv",
+    "title": "Fauda"
+  },
+  {
+    "codec": "x264",
+    "encoder": "YIFY",
+    "quality": "BrRip",
+    "resolution": "1080p",
+    "title": "Chinese Zodiac",
+    "year": 2012
+  },
+  {
+    "audio": "AAC",
+    "codec": "x264",
+    "encoder": "PDVDRip",
+    "filetype": "mkv",
+    "resolution": "720p",
+    "title": "Thai Massage",
+    "year": 2022
   }
 ]

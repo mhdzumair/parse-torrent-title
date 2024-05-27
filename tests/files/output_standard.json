@@ -2181,5 +2181,55 @@
     "codec": "H.264",
     "quality": "Blu-ray",
     "title": "The Lord of the Rings"
+  },
+  {
+    "language": ["Russian","Ukrainian"],
+    "quality": "Blu-ray",
+    "title": "Deadpool"
+  },
+  {
+    "audio": "Dolby Digital",
+    "codec": "Xvid",
+    "language": "French",
+    "quality": "DVD-Rip",
+    "title": "127 Heures"
+  },
+  {
+    "language": ["English","Portuguese"],
+    "title": "Men in Black International"
+  },
+  {
+    "codec": "Xvid",
+    "language": "Polish",
+    "quality": "DVD-Rip",
+    "title": "Quarantine"
+  },
+  {
+    "codec": "Xvid",
+    "language": "Korean",
+    "title": "All Love"
+  },
+  {
+    "codec": "H.264",
+    "language": "Korean",
+    "subtitles": "English",
+    "title": "Atonement"
+  },
+  {
+    "audio": "Dolby Digital 5.1",
+    "codec": "H.264",
+    "language": "Hebrew",
+    "network": "Netflix",
+    "title": "Fauda"
+  },
+  {
+    "codec": "H.264",
+    "quality": "BRRip",
+    "title": "Chinese Zodiac"
+  },
+  {
+    "codec": "H.264",
+    "filetype": "MKV",
+    "title": "Thai Massage"
   }
 ]
