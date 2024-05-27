@@ -411,3 +411,19 @@ types = {
     "remux": "boolean",
     "internationalCut": "boolean",
 }
+
+patterns["NON_ENGLISH_CHARS"] = "\u3040-\u30ff"  # Japanese characters
+patterns["NON_ENGLISH_CHARS"] += "\u3400-\u4dbf"  # Chinese characters
+patterns["NON_ENGLISH_CHARS"] += "\u4e00-\u9fff"  # Chinese characters
+patterns["NON_ENGLISH_CHARS"] += "\uf900-\ufaff"  # CJK Compatibility Ideographs
+patterns["NON_ENGLISH_CHARS"] += "\uff66-\uff9f"  # Halfwidth Katakana Japanese characters
+patterns["NON_ENGLISH_CHARS"] += "\u0400-\u04ff"  # Cyrillic characters (Russian)
+patterns["NON_ENGLISH_CHARS"] += "\u0600-\u06ff"  # Arabic characters
+
+patterns["RUSSIAN_CAST_REGEX"] = r"\([^)]*[\u0400-\u04ff][^)]*\)$|\/.*\((.*)\)$"
+patterns["ALT_TITLES_REGEX"] = f"[^/|(]*[{patterns['NON_ENGLISH_CHARS']}][^/|]*/|[/|][^/|(]*[{patterns['NON_ENGLISH_CHARS']}][^/|]*"
+patterns["NOT_ONLY_NON_ENGLISH_REGEX"] = rf"(?:[a-zA-Z][^{patterns['NON_ENGLISH_CHARS']}]+|^)[{patterns['NON_ENGLISH_CHARS']}].*[{patterns['NON_ENGLISH_CHARS']}]|[{patterns['NON_ENGLISH_CHARS']}].*[{patterns['NON_ENGLISH_CHARS']}](?=[^{patterns['NON_ENGLISH_CHARS']}]+[a-zA-Z])"
+patterns["NOT_ALLOWED_SYMBOLS_AT_START_AND_END"] = rf"^[^\w{patterns['NON_ENGLISH_CHARS']}#[【★]+|[ \-:/\\\[|{{(#$&^]+$"
+patterns["REMAINING_NOT_ALLOWED_SYMBOLS_AT_START_AND_END"] = rf"^[^\w{patterns['NON_ENGLISH_CHARS']}#]+|]$"
+patterns["RELEASE_GROUP_REGEX_START"] = r"^[\[【★].*[\]】★][ .]?(.+)"
+patterns["RELEASE_GROUP_REGEX_END"] = r"(.+)[ .]?[\[【★].*[\]】★]$"

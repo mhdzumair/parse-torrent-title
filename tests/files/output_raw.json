@@ -3793,5 +3793,58 @@
     "resolution": "720p",
     "title": "Thai Massage",
     "year": 2022
+  },
+  {
+    "audio": "TrueHD.7.1",
+    "codec": "AVC",
+    "encoder": "TAG",
+    "quality": "Blu-ray",
+    "resolution": "1080p",
+    "title": "] Hitman",
+    "year": 1998
+  },
+  {
+    "audio": "DDP5.1",
+    "codec": "H.264",
+    "encoder": "torrent",
+    "filetype": "MKV",
+    "network": "NF",
+    "quality": "WEB-DL",
+    "resolution": "1080p",
+    "site": "www.arabp2p.net",
+    "title": "Last Call for Istanbul",
+    "year": 2023
+  },
+  {
+    "quality": "DVDRip",
+    "title": "Blue Crush",
+    "year": 2002
+  },
+  {
+    "encoder": "]",
+    "resolution": "720p",
+    "site": "简体][招募翻译",
+    "title": "Rebirth"
+  },
+  {
+    "codec": "HEVC",
+    "filetype": "mkv",
+    "quality": "BDRip",
+    "resolution": "1080p",
+    "title": "08 Планета обезьян Революция",
+    "year": 2014
+  },
+  {
+    "encoder": "комедия",
+    "quality": "DVDRip",
+    "title": "The fruit is ripe / Griechische Feigen",
+    "year": 1976
+  },
+  {
+    "encoder": "|",
+    "quality": "TVRip",
+    "site": "BLR",
+    "title": "Кнiганошы",
+    "year": 1987
   }
 ]

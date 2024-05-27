@@ -36,21 +36,27 @@ class PTN(object):
             self.match_slices.append(match_slice)
 
     @staticmethod
-    def _clean_string(string):
-        clean = re.sub(r"^( -|\(|\[)", "", string)
-        if clean.find(" ") == -1 and clean.find(".") != -1:
+    def _clean_dots(string: str) -> str:
+        if string.find(" ") == -1 and string.find(".") != -1:
             # 4 dots likely means we want an ellipsis and a space
-            clean = re.sub(r"\.{4,}", "... ", clean)
+            string = re.sub(r"\.{4,}", "... ", string)
 
             # Replace any instances of less than 3 dots with a space
             # Lookarounds are used to prevent the 3-dots (ellipses) from being replaced
-            clean = re.sub(r"(?<!\.)\.\.(?!\.)", " ", clean)
-            clean = re.sub(r"(?<!\.)\.(?!\.\.)", " ", clean)
+            string = re.sub(r"(?<!\.)\.\.(?!\.)", " ", string)
+            string = re.sub(r"(?<!\.)\.(?!\.\.)", " ", string)
+        return string
+
+    def _clean_string(self, string):
+        clean = re.sub(r"^( -|\(|\[)", "", string)
+        clean = self._clean_dots(clean)
 
         clean = re.sub(r"_", " ", clean)
         clean = re.sub(r"([\[)_\]]|- )$", "", clean).strip()
         clean = clean.strip(" _-")
 
+        # Again, we need to clean up the dots & strip for non-english chars titles that get cleaned from above re.sub.
+        clean = self._clean_dots(clean).strip()
         return clean
 
     def parse(self, name, standardise, coherent_types):
@@ -358,7 +364,7 @@ class PTN(object):
                 relative_title_start = m.end()
                 raw = raw[relative_title_start:]
                 title_start = relative_title_start + title_start
-            clean = self._clean_string(raw)
+            clean = self._clean_string(self.clean_title(raw))
             # Re-add title_start to unrelative the index from raw to self.torrent_name
             self._part("title", (title_start, title_end), clean)
         else:
@@ -433,3 +439,14 @@ class PTN(object):
             ):
                 filtered.append(extra)
         return filtered
+
+    @staticmethod
+    def clean_title(raw_title):
+        cleaned_title = raw_title
+        cleaned_title = cleaned_title.replace(r"[[(]movie[)\]]", "")  # clear movie indication flag
+        cleaned_title = re.sub(patterns["RUSSIAN_CAST_REGEX"], " ", cleaned_title)  # clear russian cast information
+        cleaned_title = re.sub(patterns["RELEASE_GROUP_REGEX_START"], r"\1", cleaned_title)  # remove release group markings sections from the start
+        cleaned_title = re.sub(patterns["RELEASE_GROUP_REGEX_END"], r"\1", cleaned_title)  # remove unneeded markings section at the end if present
+        cleaned_title = re.sub(patterns["ALT_TITLES_REGEX"], "", cleaned_title)  # remove alt language titles
+        cleaned_title = re.sub(patterns["NOT_ONLY_NON_ENGLISH_REGEX"], "", cleaned_title)  # remove non english chars if they are not the only ones left
+        return cleaned_title
