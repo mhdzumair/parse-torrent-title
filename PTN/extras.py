@@ -94,7 +94,7 @@ exceptions = [
 # or a season. So if we have a language in the title it won't cause issues by getting matched.
 # Empty list indicates to always do so, as opposed to matching specific regexes.
 patterns_ignore_title = {
-    "language": [],
+    "languages": [],
     "audio": ["LiNE"],
     "network": ["Hallmark"],
     "untouched": [],

@@ -19,7 +19,7 @@ def try_episode_name(self, unmatched):
     if match:
         match = re.search(
             "(?:"
-            + link_patterns(patterns["episode"])
+            + link_patterns(patterns["episodes"])
             + "|"
             + patterns["day"]
             + "|"
@@ -141,44 +141,26 @@ def try_site(self):
             self._part("encoder", None, encoder.replace(raw, ""), overwrite=True)
 
 
-# If this match starts like the language one did, the only match for language
-# and subtitles is a list of langs directly followed by a subs-string. When this
-# is true, they would both match on it, but what it likely means is that all the
-# langs are language, and the subs string just indicates the existance of subtitles.
-# (e.g. Ita.Eng.MSubs would match Ita and Eng for language and subs - this makes
-# subs only become MSubs, and leaves language as Ita and Eng)
-def fix_same_subtitles_language_match(self):
-    if (
-        "language" in self.part_slices
-        and "subtitles" in self.part_slices
-        and self.part_slices["language"][0] == self.part_slices["subtitles"][0]
-    ):
-        subs = self.parts["subtitles"][-1]
-        if self.standardise:
-            subs = "Available"
-        self._part("subtitles", None, subs, overwrite=True)
-
-
 # If there are no languages, but subtitles were matched, we should assume the first lang
-# is the actual language, and remove it from the subtitles.
+# is the actual languages, and remove it from the subtitles.
 def fix_subtitles_no_language(self):
     if (
-        "language" not in self.parts
+        "languages" not in self.parts
         and "subtitles" in self.parts
         and isinstance(self.parts["subtitles"], list)
         and len(self.parts["subtitles"]) > 1
     ):
-        self._part("language", None, self.parts["subtitles"][0])
+        self._part("languages", None, self.parts["subtitles"][:1])
         self._part("subtitles", None, self.parts["subtitles"][1:], overwrite=True)
 
 
-# Language matches, to support multi-language releases that have the audio with each
-# language, will contain audio info (or simply extra strings like 'dub').
+# Language matches, to support multi-languages releases that have the audio with each
+# languages, will contain audio info (or simply extra strings like 'dub').
 # We remove non-lang matching items from this list.
 def filter_non_languages(self):
-    if "language" in self.parts and isinstance(self.parts["language"], list):
-        languages = list(self.parts["language"])
-        for lang in self.parts["language"]:
+    if "languages" in self.parts and isinstance(self.parts["languages"], list):
+        languages = list(self.parts["languages"])
+        for lang in self.parts["languages"]:
             matched = False
             for (lang_regex, lang_clean) in langs:
                 if re.match(lang_regex, lang, re.IGNORECASE):
@@ -187,22 +169,37 @@ def filter_non_languages(self):
             if not matched:
                 languages.remove(lang)
 
-        self._part("language", self.part_slices["language"], languages, overwrite=True)
+        self._part("languages", self.part_slices["languages"], languages, overwrite=True)
+
+
+def is_subtitle_available(self):
+    if "subtitles" not in self.parts:
+        return
+
+    languages = self.parts.get("languages")
+    subtitles = self.parts.get("subtitles")
+
+    self.parts["is_subtitle_available"] = bool(subtitles)
+
+    if "Available" == subtitles and languages:
+        self._part("subtitles", self.part_slices["subtitles"], languages, overwrite=True)
+    elif "Available" == subtitles:
+        self.parts.pop("subtitles")
 
 
 def try_vague_season_episode(self):
     title = self.parts["title"]
     m = re.search("(\d{1,2})-(\d{1,2})$", title)
     if m:
-        if "season" not in self.parts and "episode" not in self.parts:
+        if "seasons" not in self.parts and "episodes" not in self.parts:
             new_title = title[: m.start()]
             offset = self.part_slices["title"][0]
             # Setting the match slices here doesn't actually matter, but good practice.
             self._part(
-                "season", (offset + m.start(1), offset + m.end(1)), int(m.group(1))
+                "seasons", (offset + m.start(1), offset + m.end(1)), [int(m.group(1))]
             )
             self._part(
-                "episode", (offset + m.start(2), offset + m.end(2)), int(m.group(2))
+                "episodes", (offset + m.start(2), offset + m.end(2)), [int(m.group(2))]
             )
             self._part(
                 "title",
@@ -231,9 +228,9 @@ def remove_empty_parts(self):
 post_processing_after_excess = [
     try_encoder,
     try_site,
-    fix_same_subtitles_language_match,
     fix_subtitles_no_language,
     filter_non_languages,
+    is_subtitle_available,
     try_vague_season_episode,
     use_year_as_title_if_absent,
     remove_empty_parts,

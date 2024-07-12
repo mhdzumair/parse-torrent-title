@@ -15,7 +15,7 @@ class PTN(object):
         self.coherent_types = None
 
         self.post_title_pattern = "(?:{}|{}|720p|1080p)".format(
-            link_patterns(patterns["season"]), link_patterns(patterns["year"])
+            link_patterns(patterns["seasons"]), link_patterns(patterns["year"])
         )
 
     def _part(self, name, match_slice, clean, overwrite=False):
@@ -24,9 +24,6 @@ class PTN(object):
                 if name not in ["title", "episodeName"] and not isinstance(clean, bool):
                     if not isinstance(clean, list):
                         clean = [clean]
-            else:
-                if isinstance(clean, list) and len(clean) == 1:
-                    clean = clean[0]  # Avoids making a list if it only has 1 element
 
             self.parts[name] = clean
             self.part_slices[name] = match_slice
@@ -72,7 +69,7 @@ class PTN(object):
             pattern_options = self.normalise_pattern_options(pattern_options)
 
             for (pattern, replace, transforms) in pattern_options:
-                if key not in ("season", "episode", "site", "language", "genre"):
+                if key not in ("seasons", "episodes", "site", "languages", "genres"):
                     pattern = r"\b(?:{})\b".format(pattern)
 
                 clean_name = re.sub(r"_", " ", self.torrent_name)
@@ -101,11 +98,11 @@ class PTN(object):
 
                 index = self.get_match_indexes(match)
 
-                if key in ("season", "episode"):
+                if key in ("seasons", "episodes"):
                     clean = self.get_season_episode(match)
                 elif key == "subtitles":
                     clean = self.get_subtitles(match)
-                elif key in ("language", "genre"):
+                elif key in ("languages", "genres"):
                     clean = self.split_multi(match)
                 elif key in types.keys() and types[key] == "boolean":
                     clean = True
@@ -242,7 +239,7 @@ class PTN(object):
         elif len(match) > 1 and match[1] and m:
             clean = list(range(int(m[0]), int(match[1]) + 1))
         elif m:
-            clean = int(m[0])
+            clean = [int(m[0])]
 
         return clean
 
@@ -277,11 +274,11 @@ class PTN(object):
                 # For python2 compatibility, we're not able to simply pass functions as str.upper
                 # means different things in 2.7 and 3.5.
                 clean = getattr(clean, transform[0])(*transform[1])
-        if key == "language" or key == "subtitles":
+        if key == "languages" or key == "subtitles":
             clean = self.standardise_languages(clean)
             if not clean:
                 clean = "Available"
-        if key == "genre":
+        if key == "genres":
             clean = self.standardise_genres(clean)
         return clean
 

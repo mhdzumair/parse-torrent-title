@@ -47,8 +47,8 @@ pre_website_encoder_pattern = r"[^\s\.\[\]\-\(\)]+\)\s*\[[^\s\-]+\]|[^\s\.\[\]\-
 patterns_ordered = [
     "resolution",
     "quality",
-    "season",
-    "episode",
+    "seasons",
+    "episodes",
     "year",
     "month",
     "day",
@@ -64,7 +64,7 @@ patterns_ordered = [
     "sbs",
     "site",
     "documentary",
-    "language",
+    "languages",
     "subtitles",
     "unrated",
     "size",
@@ -82,42 +82,42 @@ patterns_ordered = [
     "untouched",
     "remux",
     "internationalCut",
-    "genre",
+    "genres",
 ]
 
 
-# Some patterns overlap with others. Season & episode do this a lot. Without something like this, we'd get issues like
+# Some patterns overlap with others. Season & episodes do this a lot. Without something like this, we'd get issues like
 # the Avatar test: ... Complete Series 1080p ... 'Series 10' would be matched as a season, but the 10 is
 # from 1080p, which also gets matched.
 patterns_allow_overlap = [
-    "season",
-    "episode",
-    "language",
+    "seasons",
+    "episodes",
+    "languages",
     "subtitles",
     "sbs"
 ]
 
 patterns = {}
-patterns["episode"] = [
+patterns["episodes"] = [
     r"(?<![a-z])(?:e|ep)(?:\(?[0-9]{1,2}(?:-?(?:e|ep)?(?:[0-9]{1,2}))?\)?)(?![0-9])",
     # Very specific as it could match too liberally
     r"\s\-\s\d{1,3}\s",
     r"\b[0-9]{1,2}x([0-9]{2})\b",
     r"\bepisod(?:e|io)" + delimiters + r"\d{1,2}\b",
 ]
-# If adding season patterns, remember to look at episode, as it uses the last few!
-patterns["season"] = [
+# If adding seasons patterns, remember to look at episodes, as it uses the last few!
+patterns["seasons"] = [
     r"\b(?:Seasons?)"
     + delimiters
     + r"(\d{1,2})" + "(?:(?:" + delimiters + r"|&|and|to){1,3}(\d{1,2})){2,}\b",
-    r"\ss?(\d{1,2})\s\-\s\d{1,2}\s",  # Avoids matching some anime releases season and episode as a season range
+    r"\ss?(\d{1,2})\s\-\s\d{1,2}\s",  # Avoids matching some anime releases seasons and episodes as a season range
     r"\b" + season_range_pattern + r"\b",  # Describes season ranges
     r"(?:s\d{1,2}[.+\s]*){2,}\b",  # for S01.S02.etc. patterns
-    # Describes season, optionally with complete or episode
+    # Describes season, optionally with complete or episodes
     r"\b(?:Complete"
     + delimiters
     + ")?s([0-9]{1,2})"
-    + link_patterns(patterns["episode"])
+    + link_patterns(patterns["episodes"])
     + r"?\b",
     r"\b([0-9]{1,2})x[0-9]{2}\b",  # Describes 5x02, 12x15 type descriptions
     "[0-9]{1,2}(?:st|nd|rd|th)" + delimiters + "season",
@@ -127,8 +127,8 @@ patterns["season"] = [
     + r")?Season[\. -][0-9]{1,2}\b",  # Describes Season.15 type descriptions
 ]
 # The first 4 season regexes won't have 'Part' in them.
-patterns["episode"] += [
-    link_patterns(patterns["season"][6:])
+patterns["episodes"] += [
+    link_patterns(patterns["seasons"][6:])
     + delimiters
     + "*P(?:ar)?t"
     + delimiters
@@ -317,7 +317,7 @@ lang_list_pattern = (
 subs_list_pattern = r"(?:" + link_patterns(langs) + delimiters + "*)"
 
 patterns["subtitles"] = [
-    # Below must stay first, see patterns["language"]
+    # Below must stay first, see patterns["languages"]
     "sub(?:title|bed)?s?{d}*{langs}+".format(d=delimiters, langs=subs_list_pattern),
     "(?:soft{d}*)?{langs}+(?:(?:m(?:ulti(?:ple)?)?{d}*)?sub(?:title|bed)?s?)".format(
         d=delimiters, langs=subs_list_pattern
@@ -326,7 +326,7 @@ patterns["subtitles"] = [
     # The following are patterns just for the 'subs' strings. Add normal sub stuff above.
     # Need a pattern just for subs, and can't just make above regexes * over + as we want
     # just 'subs' to match last.
-    # The second-last one must stay second-last, see patterns["language"]
+    # The second-last one must stay second-last, see patterns["languages"]
     "(?:m(?:ulti(?:ple)?)?{d}*)sub(?:title|bed)?s?".format(d=delimiters),
     "(?:m(?:ulti(?:ple)?)?[\.\s\-\+_\/]*)?sub(?:title|bed)?s?{d}*".format(d=delimiters),
 ]
@@ -334,7 +334,7 @@ patterns["subtitles"] = [
 # then a subtitles match starting with subs, the first langs are languages, and the
 # rest will be left as subtitles. Otherwise, don't match if there are subtitles matches
 # after the langs.
-patterns["language"] = [
+patterns["languages"] = [
     "("
     + lang_list_pattern
     + "+)(?:"
@@ -379,14 +379,14 @@ patterns["upscaled"] = "(?:AI{d}*)?upscaled?".format(d=delimiters)
 patterns["untouched"] = "untouched"
 patterns["remux"] = "REMUX"
 patterns["internationalCut"] = "International{d}Cut".format(d=delimiters)
-# Spaces are only allowed before the genre list if after a word boundary or punctuation
-patterns["genre"] = (
+# Spaces are only allowed before the genres list if after a word boundary or punctuation
+patterns["genres"] = (
     r"\b\s*[\(\-\]]+\s*((?:" + link_patterns(genres) + delimiters + r"?)+)\b"
 )
 
 types = {
-    "season": "integer",
-    "episode": "integer",
+    "seasons": "integer",
+    "episodes": "integer",
     "bitDepth": "integer",
     "year": "integer",
     "month": "integer",
