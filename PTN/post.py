@@ -6,6 +6,12 @@ from typing import Any
 from .extras import link_patterns, complete_series, langs
 from .patterns import episode_name_pattern, patterns, pre_website_encoder_pattern
 
+# Compile regex patterns once for reuse
+episode_name_compiled = re.compile(episode_name_pattern)
+pre_website_encoder_compiled = re.compile(pre_website_encoder_pattern.strip(), re.IGNORECASE)
+complete_series_compiled = re.compile(link_patterns(complete_series), re.IGNORECASE)
+filetype_pattern_compiled = re.compile(link_patterns(patterns['filetype']), re.IGNORECASE)
+
 
 # Post-processing functions that run after the main parsing.
 
@@ -15,13 +21,10 @@ from .patterns import episode_name_pattern, patterns, pre_website_encoder_patter
 
 # Try and find the episode name.
 def try_episode_name(self: Any, unmatched: str) -> str:
-    match = re.findall(episode_name_pattern, unmatched)
+    match = episode_name_compiled.findall(unmatched)
     if match:
-        match = re.search(
-            rf"(?:{link_patterns(patterns['episodes'])}|{patterns['day']}|{patterns['year']})[._\-\s+]*({re.escape(match[0])})",
-            self.torrent_name,
-            re.IGNORECASE,
-        )
+        pattern = rf"(?:{link_patterns(patterns['episodes'])}|{patterns['day']}|{patterns['year']})[._\-\s+]*({re.escape(match[0])})"
+        match = re.search(pattern, self.torrent_name, re.IGNORECASE)
         if match:
             match_s, match_e = match.start(len(match.groups())), match.end(len(match.groups()))
             self._part("episodeName", (match_s, match_e), self._clean_string(match.group(len(match.groups()))))
@@ -30,14 +33,11 @@ def try_episode_name(self: Any, unmatched: str) -> str:
 
 
 def try_encoder_before_site(self: Any, unmatched: str) -> str:
-    match = re.findall(pre_website_encoder_pattern, unmatched.strip())
+    match = pre_website_encoder_compiled.findall(unmatched.strip())
     if match:
         for m in match:
-            full_title_match = re.search(
-                rf"[\s\-]({re.escape(m)})(?:\.{link_patterns(patterns['filetype'])})?$",
-                self.torrent_name,
-                re.I,
-            )
+            pattern = rf"[\s\-]({re.escape(m)})(?:\.{filetype_pattern_compiled.pattern})?$"
+            full_title_match = re.search(pattern, self.torrent_name, re.I)
             if full_title_match:
                 match_s, match_e = full_title_match.start(0), full_title_match.end(0)
                 encoder_and_site = list(filter(None, re.split(r"[\-\s\)]", full_title_match.group(1))))
@@ -52,8 +52,7 @@ def try_encoder_before_site(self: Any, unmatched: str) -> str:
 
 def remove_complete_series_string(self: Any, unmatched: str) -> str:
     if "title" in self.parts:
-        complete_series_regex = link_patterns(complete_series)
-        complete_match = re.search(complete_series_regex, self.parts["title"], flags=re.I)
+        complete_match = complete_series_compiled.search(self.parts["title"])
         if complete_match:
             title = self.parts["title"]
             title = title[:complete_match.start()] + title[complete_match.end():]
