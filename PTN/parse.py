@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 import re
 from typing import Dict, List, Tuple, Union, Optional, Any
+
 from .extras import (
     delimiters,
     langs,
     genres,
     exceptions,
-    complete_series,
     patterns_ignore_title,
-    get_channel_audio_options,
-    prefix_pattern_with,
-    suffix_pattern_with,
     link_patterns,
 )
 from .patterns import patterns, patterns_ordered, types, patterns_allow_overlap
@@ -56,7 +53,6 @@ class PTN:
     def _clean_string(self, string: str) -> str:
         clean = re.sub(r"^( -|\(|\[)", "", string)
         clean = self._clean_dots(clean)
-
         clean = re.sub(r"_", " ", clean)
         clean = re.sub(r"([\[)_\]]|- )$", "", clean).strip()
         clean = clean.strip(" _-")
@@ -98,7 +94,7 @@ class PTN:
             if key not in ("seasons", "episodes", "site", "languages", "genres"):
                 pattern = rf"\b(?:{pattern})\b"
 
-            clean_name = re.sub(r"_", " ", self.torrent_name)
+            clean_name = self.torrent_name.replace("_", " ")
             matches = self.get_matches(pattern, clean_name, key)
 
             if not matches:
@@ -116,143 +112,79 @@ class PTN:
                 continue
 
             index = self.get_match_indexes(match)
-
-            if key in ("seasons", "episodes"):
-                clean = self.get_season_episode(match)
-            elif key == "subtitles":
-                clean = self.get_subtitles(match)
-            elif key in ("languages", "genres"):
-                clean = self.split_multi(match)
-            elif key in types and types[key] == "boolean":
-                clean = True
-            else:
-                clean = match[index["clean"]]
-                if key in types and types[key] == "integer":
-                    clean = int(clean)
+            clean = self._get_clean_value(key, match, index)
 
             if self.standardise:
                 clean = self.standardise_clean(clean, key, replace, transforms)
 
-            part_overlaps = any(
-                self._is_overlap(part_slice, (match_start, match_end))
-                for part, part_slice in self.part_slices.items()
-                if part not in patterns_allow_overlap
-            )
-
-            if not part_overlaps:
+            if not self._has_overlap(match_start, match_end):
                 self._part(key, (match_start, match_end), clean)
 
     # Handles all the optional/missing tuple elements into a consistent list.
     @staticmethod
     def normalise_pattern_options(pattern_options: Union[str, Tuple, List[Union[str, Tuple]]]) -> List[Tuple[str, Optional[str], Optional[Union[str, List[Tuple[str, List[Any]]]]]]]:
-        pattern_options_norm = []
-
-        if isinstance(pattern_options, tuple):
+        if isinstance(pattern_options, (str, tuple)):
             pattern_options = [pattern_options]
-        elif not isinstance(pattern_options, list):
-            pattern_options = [(pattern_options, None, None)]
-        for options in pattern_options:
-            if len(options) == 2:  # No transformation
-                pattern_options_norm.append(options + (None,))
-            elif isinstance(options, tuple):
-                if isinstance(options[2], tuple):
-                    pattern_options_norm.append(
-                        tuple(list(options[:2]) + [[options[2]]])
-                    )
-                elif isinstance(options[2], list):
-                    pattern_options_norm.append(options)
-                else:
-                    pattern_options_norm.append(
-                        tuple(list(options[:2]) + [[(options[2], [])]])
-                    )
-
+        normalized = []
+        for option in pattern_options:
+            if isinstance(option, str):
+                normalized.append((option, None, None))
+            elif len(option) == 2:
+                normalized.append(option + (None,))
             else:
-                pattern_options_norm.append((options, None, None))
-        return pattern_options_norm
+                transforms = option[2]
+                if isinstance(transforms, tuple):
+                    transforms = [transforms]
+                elif not isinstance(transforms, list):
+                    transforms = [(transforms, [])]
+                normalized.append((option[0], option[1], transforms))
+        return normalized
 
     def get_matches(self, pattern: str, clean_name: str, key: str) -> List[Dict[str, Union[str, int]]]:
-        grouped_matches = []
-        matches = list(re.finditer(pattern, clean_name, re.IGNORECASE))
-        for m in matches:
-            if m.start() < self.ignore_before_index(clean_name, key):
-                continue
-            groups = m.groups()
-            if not groups:
-                grouped_matches.append((m.group(), m.start(), m.end()))
-            else:
-                grouped_matches.append((groups, m.start(), m.end()))
+        compiled_pattern = re.compile(pattern, re.IGNORECASE)
+        matches = compiled_pattern.finditer(clean_name)
+        grouped_matches = [
+            {"match": (m.groups() if m.groups() else [m.group()]), "start": m.start(), "end": m.end()}
+            for m in matches if m.start() >= self.ignore_before_index(clean_name, key)
+        ]
+        return grouped_matches
 
-        parsed_matches = []
-        for match in grouped_matches:
-            m = match[0]
-            if isinstance(m, tuple):
-                m = list(m)
-            else:
-                m = [m]
-            parsed_matches.append({"match": m, "start": match[1], "end": match[2]})
-        return parsed_matches
-
-    # Only use part of the torrent name after the (guessed) title (split at a season or year)
-    # to avoid matching certain patterns that could show up in a release title.
     def ignore_before_index(self, clean_name: str, key: str) -> int:
-        match = None
-        if key in patterns_ignore_title:
-            patterns_ignored = patterns_ignore_title[key]
-            if not patterns_ignored:
-                match = re.search(self.post_title_pattern, clean_name, re.IGNORECASE)
-            else:
-                for ignore_pattern in patterns_ignored:
-                    if re.findall(ignore_pattern, clean_name, re.IGNORECASE):
-                        match = re.search(self.post_title_pattern, clean_name, re.IGNORECASE)
-
-        if match:
-            return match.start()
-        return 0
+        if key not in patterns_ignore_title:
+            return 0
+        patterns_ignored = patterns_ignore_title[key]
+        match = re.search(self.post_title_pattern, clean_name, re.IGNORECASE) if not patterns_ignored else None
+        if not match:
+            for ignore_pattern in patterns_ignored:
+                if re.findall(ignore_pattern, clean_name, re.IGNORECASE):
+                    match = re.search(self.post_title_pattern, clean_name, re.IGNORECASE)
+                    if match:
+                        break
+        return match.start() if match else 0
 
     @staticmethod
     def get_match_indexes(match: List[str]) -> Dict[str, int]:
-        index = {"raw": 0, "clean": 0}
-
-        if len(match) > 1:
-            # for season we might have it in index 1 or index 2
-            # e.g. "5x09" TODO is this weirdness necessary
-            for i in range(1, len(match)):
-                if match[i]:
-                    index["clean"] = i
-                    break
-
-        return index
+        return {"raw": 0, "clean": next((i for i in range(1, len(match)) if match[i]), 0)}
 
     @staticmethod
     def get_season_episode(match: List[str]) -> Optional[List[int]]:
         m = re.findall(r"[0-9]+", match[0])
         if m and len(m) > 1:
             return list(range(int(m[0]), int(m[-1]) + 1))
-        elif len(match) > 1 and match[1] and m:
+        if len(match) > 1 and match[1] and m:
             return list(range(int(m[0]), int(match[1]) + 1))
-        elif m:
+        if m:
             return [int(m[0])]
         return None
 
     @staticmethod
     def split_multi(match: List[str]) -> List[str]:
-        m = re.split(rf"{delimiters}+", match[0])
-        return list(filter(None, m))
+        return list(filter(None, re.split(rf"{delimiters}+", match[0])))
 
     @staticmethod
     def get_subtitles(match: List[str]) -> List[str]:
-        # handle multi subtitles
-        m = re.split(rf"{delimiters}+", match[0])
-        m = list(filter(None, m))
-        clean = []
-        # If it's only 1 result, it's fine if it's just 'subs'.
-        if len(m) == 1:
-            clean = m
-        else:
-            for x in m:
-                if not re.match("subs?|soft", x, re.I):
-                    clean.append(x)
-        return clean
+        m = list(filter(None, re.split(rf"{delimiters}+", match[0])))
+        return m if len(m) == 1 else [x for x in m if not re.match("subs?|soft", x, re.I)]
 
     def standardise_clean(self, clean: Union[str, List[str]], key: str, replace: Optional[str], transforms: Optional[Union[str, List[Tuple[str, List[Any]]]]]) -> Union[str, List[str]]:
         if replace:
@@ -282,40 +214,29 @@ class PTN:
     def standardise_genres(clean: List[str]) -> List[str]:
         standard_genres = []
         for genre in clean:
-            for regex, clean in genres:
+            for regex, clean_genre in genres:
                 if re.match(regex, genre, re.IGNORECASE):
-                    standard_genres.append(clean)
+                    standard_genres.append(clean_genre)
                     break
         return standard_genres
 
-    # Merge all the match slices (such as when they overlap), then remove
-    # them from excess.
     def merge_match_slices(self) -> None:
-        matches = sorted(self.match_slices, key=lambda match: match[0])
-        slices = []
+        self.match_slices.sort(key=lambda match: match[0])
+        merged = []
         i = 0
-        while i < len(matches):
-            start, end = matches[i]
+        while i < len(self.match_slices):
+            start, end = self.match_slices[i]
             i += 1
-            for next_start, next_end in matches[i:]:
-                if next_start <= end:
-                    end = max(end, next_end)
-                    i += 1
-                else:
-                    break
-            slices.append((start, end))
-        self.match_slices = slices
+            while i < len(self.match_slices) and self.match_slices[i][0] <= end:
+                end = max(end, self.match_slices[i][1])
+                i += 1
+            merged.append((start, end))
+        self.match_slices = merged
 
     def process_title(self) -> None:
         unmatched = self.unmatched_list(keep_punctuation=False)
-
-        # Use the first one as the title
         if unmatched:
-            title_start, title_end = unmatched[0][0], unmatched[0][1]
-
-            # If our unmatched is after the first 3 matches, we assume the title is missing
-            # (or more likely got parsed as something else), as no torrents have it that
-            # far away from the beginning of the release title.
+            title_start, title_end = unmatched[0]
             if len(self.part_slices) > 3 and title_start > sorted(self.part_slices.values(), key=lambda s: s[0])[3][0]:
                 self._part("title", None, "")
 
@@ -372,40 +293,48 @@ class PTN:
                     self._part("title", None, exception["actual_title"], overwrite=True)
 
     def get_unmatched(self) -> str:
-        unmatched = ""
-        for start, end in self.unmatched_list():
-            unmatched += self.torrent_name[start:end]
-        return unmatched
+        return "".join([self.torrent_name[start:end] for start, end in self.unmatched_list()])
 
     def clean_unmatched(self) -> List[str]:
-        unmatched = []
-        for start, end in self.unmatched_list():
-            unmatched.append(self.torrent_name[start:end])
-
+        unmatched = [self.torrent_name[start:end] for start, end in self.unmatched_list()]
         unmatched_clean = []
         for raw in unmatched:
             clean = re.sub(r"(^[-_.\s(),]+)|([-.\s,]+$)", "", raw)
             clean = re.sub(r"[()/]", " ", clean)
-            unmatched_clean += re.split(r"\.\.+|\s+", clean)
-
-        filtered = []
-        for extra in unmatched_clean:
-            # re.fullmatch() is not available in python 2.7, so we manually do it with \Z.
-            if not re.match(rf"(?:Complete|Season|Full)?[\]\[,.+\- ]*(?:Complete|Season|Full)?\Z", extra, re.IGNORECASE):
-                filtered.append(extra)
-        return filtered
+            unmatched_clean.extend(re.split(r"\.\.+|\s+", clean))
+        return [extra for extra in unmatched_clean if not re.match(rf"(?:Complete|Season|Full)?[\]\[,.+\- ]*(?:Complete|Season|Full)?\Z", extra, re.IGNORECASE)]
 
     @staticmethod
     def clean_title(raw_title: str) -> str:
-        cleaned_title = raw_title.replace(r"[[(]movie[)\]]", "")  # clear movie indication flag
-        cleaned_title = re.sub(patterns["RUSSIAN_CAST_REGEX"], " ", cleaned_title)  # clear russian cast information
-        cleaned_title = re.sub(patterns["RELEASE_GROUP_REGEX_START"], r"\1", cleaned_title)  # remove release group markings sections from the start
-        cleaned_title = re.sub(patterns["RELEASE_GROUP_REGEX_END"], r"\1", cleaned_title)  # remove unneeded markings section at the end if present
-        cleaned_title = re.sub(patterns["ALT_TITLES_REGEX"], "", cleaned_title)  # remove alt language titles
-        cleaned_title = re.sub(patterns["NOT_ONLY_NON_ENGLISH_REGEX"], "", cleaned_title)  # remove non english chars if they are not the only ones left
+        cleaned_title = raw_title.replace(r"[[(]movie[)\]]", "")
+        cleaned_title = re.sub(patterns["RUSSIAN_CAST_REGEX"], " ", cleaned_title)
+        cleaned_title = re.sub(patterns["RELEASE_GROUP_REGEX_START"], r"\1", cleaned_title)
+        cleaned_title = re.sub(patterns["RELEASE_GROUP_REGEX_END"], r"\1", cleaned_title)
+        cleaned_title = re.sub(patterns["ALT_TITLES_REGEX"], "", cleaned_title)
+        cleaned_title = re.sub(patterns["NOT_ONLY_NON_ENGLISH_REGEX"], "", cleaned_title)
         return cleaned_title
 
     @staticmethod
     def _is_overlap(part_slice: Tuple[int, int], match_slice: Tuple[int, int]) -> bool:
-        # Strict smaller/larger than since punctuation can overlap.
         return (part_slice[0] < match_slice[0] < part_slice[1]) or (part_slice[0] < match_slice[1] < part_slice[1])
+
+    def _get_clean_value(self, key: str, match: List[str], index: Dict[str, int]) -> Union[str, int, List[int], bool]:
+        if key in ("seasons", "episodes"):
+            return self.get_season_episode(match)
+        if key == "subtitles":
+            return self.get_subtitles(match)
+        if key in ("languages", "genres"):
+            return self.split_multi(match)
+        if key in types and types[key] == "boolean":
+            return True
+        clean = match[index["clean"]]
+        if key in types and types[key] == "integer":
+            return int(clean)
+        return clean
+
+    def _has_overlap(self, match_start: int, match_end: int) -> bool:
+        return any(
+            self._is_overlap(part_slice, (match_start, match_end))
+            for part, part_slice in self.part_slices.items()
+            if part not in patterns_allow_overlap
+        )

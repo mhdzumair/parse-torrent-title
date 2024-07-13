@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-import re
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple, Union
 
 # Helper functions and constants for patterns.py
 
@@ -97,8 +96,8 @@ exceptions = [
 # Empty list indicates to always do so, as opposed to matching specific regexes.
 patterns_ignore_title = {
     "languages": [],
-    "audio": ["LiNE"],
-    "network": ["Hallmark"],
+    "audio": [r"LiNE"],
+    "network": [r"Hallmark"],
     "untouched": [],
     "internal": [],
     "limited": [],
@@ -171,6 +170,4 @@ def suffix_pattern_with(suffixes: Union[str, List[str]], pattern_options: Union[
 def link_patterns(pattern_options: Union[str, List[Union[str, Tuple]]]) -> str:
     if not isinstance(pattern_options, list):
         return pattern_options
-    return (
-        rf"(?:{'|'.join([pattern_option[0] if isinstance(pattern_option, tuple) else pattern_option for pattern_option in pattern_options])})"
-    )
+    return rf"(?:{'|'.join([pattern_option[0] if isinstance(pattern_option, tuple) else pattern_option for pattern_option in pattern_options])})"
