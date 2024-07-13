@@ -1,30 +1,40 @@
 #!/usr/bin/env python
-from . import re
-from .extras import exceptions, genres, langs, link_patterns, patterns_ignore_title
-from .patterns import delimiters, patterns, patterns_ordered, types, patterns_allow_overlap
+import re
+from typing import Dict, List, Tuple, Union, Optional, Any
+from .extras import (
+    delimiters,
+    langs,
+    genres,
+    exceptions,
+    complete_series,
+    patterns_ignore_title,
+    get_channel_audio_options,
+    prefix_pattern_with,
+    suffix_pattern_with,
+    link_patterns,
+)
+from .patterns import patterns, patterns_ordered, types, patterns_allow_overlap
 from .post import post_processing_after_excess, post_processing_before_excess
 
 
-class PTN(object):
+class PTN:
     def __init__(self):
         self.torrent_name = None
-        self.parts = None
-        self.part_slices = None
-        self.match_slices = None
-        self.standardise = None
-        self.coherent_types = None
+        self.parts: Dict[str, Union[str, int, List[int], bool]] = {}
+        self.part_slices: Dict[str, Tuple[int, int]] = {}
+        self.match_slices: List[Tuple[int, int]] = []
+        self.standardise = False
+        self.coherent_types = False
+        self.post_title_pattern = self._generate_post_title_pattern()
 
-        self.post_title_pattern = "(?:{}|{}|720p|1080p)".format(
-            link_patterns(patterns["seasons"]), link_patterns(patterns["year"])
-        )
+    def _generate_post_title_pattern(self) -> str:
+        return f"(?:{link_patterns(patterns['seasons'])}|{link_patterns(patterns['year'])}|720p|1080p)"
 
-    def _part(self, name, match_slice, clean, overwrite=False):
+    def _part(self, name: str, match_slice: Optional[Tuple[int, int]], clean: Union[str, int, List[int], bool], overwrite: bool = False) -> None:
         if overwrite or name not in self.parts:
-            if self.coherent_types:
-                if name not in ["title", "episodeName"] and not isinstance(clean, bool):
-                    if not isinstance(clean, list):
-                        clean = [clean]
-
+            if self.coherent_types and name not in ["title", "episodeName"] and not isinstance(clean, bool):
+                if not isinstance(clean, list):
+                    clean = [clean]
             self.parts[name] = clean
             self.part_slices[name] = match_slice
 
@@ -34,8 +44,7 @@ class PTN(object):
 
     @staticmethod
     def _clean_dots(string: str) -> str:
-        if string.find(" ") == -1 and string.find(".") != -1:
-            # 4 dots likely means we want an ellipsis and a space
+        if ' ' not in string and '.' in string:
             string = re.sub(r"\.{4,}", "... ", string)
 
             # Replace any instances of less than 3 dots with a space
@@ -44,7 +53,7 @@ class PTN(object):
             string = re.sub(r"(?<!\.)\.(?!\.\.)", " ", string)
         return string
 
-    def _clean_string(self, string):
+    def _clean_string(self, string: str) -> str:
         clean = re.sub(r"^( -|\(|\[)", "", string)
         clean = self._clean_dots(clean)
 
@@ -56,77 +65,17 @@ class PTN(object):
         clean = self._clean_dots(clean).strip()
         return clean
 
-    def parse(self, name, standardise, coherent_types):
-        name = name.strip()
+    def parse(self, name: str, standardise: bool, coherent_types: bool) -> Dict[str, Union[str, int, List[int], bool]]:
+        self.torrent_name = name.strip()
         self.parts = {}
         self.part_slices = {}
-        self.torrent_name = name
         self.match_slices = []
         self.standardise = standardise
         self.coherent_types = coherent_types
 
-        for key, pattern_options in [(key, patterns[key]) for key in patterns_ordered]:
-            pattern_options = self.normalise_pattern_options(pattern_options)
-
-            for (pattern, replace, transforms) in pattern_options:
-                if key not in ("seasons", "episodes", "site", "languages", "genres"):
-                    pattern = r"\b(?:{})\b".format(pattern)
-
-                clean_name = re.sub(r"_", " ", self.torrent_name)
-                matches = self.get_matches(pattern, clean_name, key)
-
-                if not matches:
-                    continue
-
-                # With multiple matches, we will usually want to use the first match.
-                # For 'year', we instead use the last instance of a year match since,
-                # if a title includes a year, we don't want to use this for the year field.
-                match_index = 0
-                if key == "year":
-                    match_index = -1
-
-                match = matches[match_index]["match"]
-                match_start, match_end = (
-                    matches[match_index]["start"],
-                    matches[match_index]["end"],
-                )
-                if (
-                    key in self.parts
-                ):  # We can skip ahead if we already have a matched part
-                    self._part(key, (match_start, match_end), None, overwrite=False)
-                    continue
-
-                index = self.get_match_indexes(match)
-
-                if key in ("seasons", "episodes"):
-                    clean = self.get_season_episode(match)
-                elif key == "subtitles":
-                    clean = self.get_subtitles(match)
-                elif key in ("languages", "genres"):
-                    clean = self.split_multi(match)
-                elif key in types.keys() and types[key] == "boolean":
-                    clean = True
-                else:
-                    clean = match[index["clean"]]
-                    if key in types.keys() and types[key] == "integer":
-                        clean = int(clean)
-
-                if self.standardise:
-                    clean = self.standardise_clean(clean, key, replace, transforms)
-
-                part_overlaps = False
-                for part, part_slices in self.part_slices.items():
-                    if part not in patterns_allow_overlap:
-                        # Strict smaller/larger than since punctuation can overlap.
-                        if (
-                            (part_slices[0] < match_start < part_slices[1])
-                            or (part_slices[0] < match_end < part_slices[1])
-                        ):
-                            part_overlaps = True
-                            break
-
-                if not part_overlaps:
-                    self._part(key, (match_start, match_end), clean)
+        for key in patterns_ordered:
+            pattern_options = self.normalise_pattern_options(patterns[key])
+            self._apply_patterns(key, pattern_options)
 
         self.process_title()
         self.fix_known_exceptions()
@@ -135,7 +84,6 @@ class PTN(object):
         for f in post_processing_before_excess:
             unmatched = f(self, unmatched)
 
-        # clean_unmatched() depends on the before_excess methods adding more match slices.
         cleaned_unmatched = self.clean_unmatched()
         if cleaned_unmatched:
             self._part("excess", None, cleaned_unmatched)
@@ -145,9 +93,58 @@ class PTN(object):
 
         return self.parts
 
+    def _apply_patterns(self, key: str, pattern_options: List[Tuple[str, Optional[str], Optional[Union[str, List[Tuple[str, List[Any]]]]]]]) -> None:
+        for pattern, replace, transforms in pattern_options:
+            if key not in ("seasons", "episodes", "site", "languages", "genres"):
+                pattern = rf"\b(?:{pattern})\b"
+
+            clean_name = re.sub(r"_", " ", self.torrent_name)
+            matches = self.get_matches(pattern, clean_name, key)
+
+            if not matches:
+                continue
+
+            # With multiple matches, we will usually want to use the first match.
+            # For 'year', we instead use the last instance of a year match since,
+            # if a title includes a year, we don't want to use this for the year field.
+            match_index = -1 if key == "year" else 0
+            match = matches[match_index]["match"]
+            match_start, match_end = matches[match_index]["start"], matches[match_index]["end"]
+
+            if key in self.parts:  # We can skip ahead if we already have a matched part
+                self._part(key, (match_start, match_end), None, overwrite=False)
+                continue
+
+            index = self.get_match_indexes(match)
+
+            if key in ("seasons", "episodes"):
+                clean = self.get_season_episode(match)
+            elif key == "subtitles":
+                clean = self.get_subtitles(match)
+            elif key in ("languages", "genres"):
+                clean = self.split_multi(match)
+            elif key in types and types[key] == "boolean":
+                clean = True
+            else:
+                clean = match[index["clean"]]
+                if key in types and types[key] == "integer":
+                    clean = int(clean)
+
+            if self.standardise:
+                clean = self.standardise_clean(clean, key, replace, transforms)
+
+            part_overlaps = any(
+                self._is_overlap(part_slice, (match_start, match_end))
+                for part, part_slice in self.part_slices.items()
+                if part not in patterns_allow_overlap
+            )
+
+            if not part_overlaps:
+                self._part(key, (match_start, match_end), clean)
+
     # Handles all the optional/missing tuple elements into a consistent list.
     @staticmethod
-    def normalise_pattern_options(pattern_options):
+    def normalise_pattern_options(pattern_options: Union[str, Tuple, List[Union[str, Tuple]]]) -> List[Tuple[str, Optional[str], Optional[Union[str, List[Tuple[str, List[Any]]]]]]]:
         pattern_options_norm = []
 
         if isinstance(pattern_options, tuple):
@@ -171,10 +168,9 @@ class PTN(object):
 
             else:
                 pattern_options_norm.append((options, None, None))
-        pattern_options = pattern_options_norm
-        return pattern_options
+        return pattern_options_norm
 
-    def get_matches(self, pattern, clean_name, key):
+    def get_matches(self, pattern: str, clean_name: str, key: str) -> List[Dict[str, Union[str, int]]]:
         grouped_matches = []
         matches = list(re.finditer(pattern, clean_name, re.IGNORECASE))
         for m in matches:
@@ -198,7 +194,7 @@ class PTN(object):
 
     # Only use part of the torrent name after the (guessed) title (split at a season or year)
     # to avoid matching certain patterns that could show up in a release title.
-    def ignore_before_index(self, clean_name, key):
+    def ignore_before_index(self, clean_name: str, key: str) -> int:
         match = None
         if key in patterns_ignore_title:
             patterns_ignored = patterns_ignore_title[key]
@@ -207,16 +203,14 @@ class PTN(object):
             else:
                 for ignore_pattern in patterns_ignored:
                     if re.findall(ignore_pattern, clean_name, re.IGNORECASE):
-                        match = re.search(
-                            self.post_title_pattern, clean_name, re.IGNORECASE
-                        )
+                        match = re.search(self.post_title_pattern, clean_name, re.IGNORECASE)
 
         if match:
             return match.start()
         return 0
 
     @staticmethod
-    def get_match_indexes(match):
+    def get_match_indexes(match: List[str]) -> Dict[str, int]:
         index = {"raw": 0, "clean": 0}
 
         if len(match) > 1:
@@ -230,30 +224,25 @@ class PTN(object):
         return index
 
     @staticmethod
-    def get_season_episode(match):
-        clean = None
+    def get_season_episode(match: List[str]) -> Optional[List[int]]:
         m = re.findall(r"[0-9]+", match[0])
         if m and len(m) > 1:
-            clean = list(range(int(m[0]), int(m[-1]) + 1))
-        # This elif exists entirely for the Seasons 1, 2, 3, 4, etc. case. No other regex gives a number in match[1].
+            return list(range(int(m[0]), int(m[-1]) + 1))
         elif len(match) > 1 and match[1] and m:
-            clean = list(range(int(m[0]), int(match[1]) + 1))
+            return list(range(int(m[0]), int(match[1]) + 1))
         elif m:
-            clean = [int(m[0])]
-
-        return clean
-
-    @staticmethod
-    def split_multi(match):
-        m = re.split(r"{}+".format(delimiters), match[0])
-        clean = list(filter(None, m))
-
-        return clean
+            return [int(m[0])]
+        return None
 
     @staticmethod
-    def get_subtitles(match):
+    def split_multi(match: List[str]) -> List[str]:
+        m = re.split(rf"{delimiters}+", match[0])
+        return list(filter(None, m))
+
+    @staticmethod
+    def get_subtitles(match: List[str]) -> List[str]:
         # handle multi subtitles
-        m = re.split(r"{}+".format(delimiters), match[0])
+        m = re.split(rf"{delimiters}+", match[0])
         m = list(filter(None, m))
         clean = []
         # If it's only 1 result, it's fine if it's just 'subs'.
@@ -263,18 +252,15 @@ class PTN(object):
             for x in m:
                 if not re.match("subs?|soft", x, re.I):
                     clean.append(x)
-
         return clean
 
-    def standardise_clean(self, clean, key, replace, transforms):
+    def standardise_clean(self, clean: Union[str, List[str]], key: str, replace: Optional[str], transforms: Optional[Union[str, List[Tuple[str, List[Any]]]]]) -> Union[str, List[str]]:
         if replace:
             clean = replace
         if transforms:
             for transform in filter(lambda t: t[0], transforms):
-                # For python2 compatibility, we're not able to simply pass functions as str.upper
-                # means different things in 2.7 and 3.5.
                 clean = getattr(clean, transform[0])(*transform[1])
-        if key == "languages" or key == "subtitles":
+        if key in ["languages", "subtitles"]:
             clean = self.standardise_languages(clean)
             if not clean:
                 clean = "Available"
@@ -283,27 +269,20 @@ class PTN(object):
         return clean
 
     @staticmethod
-    def standardise_languages(clean):
+    def standardise_languages(clean: List[str]) -> List[str]:
         cleaned_langs = []
         for lang in clean:
-            for (lang_regex, lang_clean) in langs:
-                if re.match(
-                    lang_regex,
-                    re.sub(
-                        link_patterns(patterns["subtitles"][-2:]), "", lang, flags=re.I
-                    ),
-                    re.IGNORECASE,
-                ):
+            for lang_regex, lang_clean in langs:
+                if re.match(lang_regex, re.sub(link_patterns(patterns["subtitles"][-2:]), "", lang, flags=re.I), re.IGNORECASE):
                     cleaned_langs.append(lang_clean)
                     break
-        clean = cleaned_langs
-        return clean
+        return cleaned_langs
 
     @staticmethod
-    def standardise_genres(clean):
+    def standardise_genres(clean: List[str]) -> List[str]:
         standard_genres = []
         for genre in clean:
-            for (regex, clean) in genres:
+            for regex, clean in genres:
                 if re.match(regex, genre, re.IGNORECASE):
                     standard_genres.append(clean)
                     break
@@ -311,25 +290,23 @@ class PTN(object):
 
     # Merge all the match slices (such as when they overlap), then remove
     # them from excess.
-    def merge_match_slices(self):
+    def merge_match_slices(self) -> None:
         matches = sorted(self.match_slices, key=lambda match: match[0])
-
-        i = 0
         slices = []
+        i = 0
         while i < len(matches):
             start, end = matches[i]
             i += 1
-            for (next_start, next_end) in matches[i:]:
+            for next_start, next_end in matches[i:]:
                 if next_start <= end:
                     end = max(end, next_end)
                     i += 1
                 else:
                     break
             slices.append((start, end))
-
         self.match_slices = slices
 
-    def process_title(self):
+    def process_title(self) -> None:
         unmatched = self.unmatched_list(keep_punctuation=False)
 
         # Use the first one as the title
@@ -339,11 +316,7 @@ class PTN(object):
             # If our unmatched is after the first 3 matches, we assume the title is missing
             # (or more likely got parsed as something else), as no torrents have it that
             # far away from the beginning of the release title.
-            if (
-                len(self.part_slices) > 3
-                and title_start
-                > sorted(self.part_slices.values(), key=lambda s: s[0])[3][0]
-            ):
+            if len(self.part_slices) > 3 and title_start > sorted(self.part_slices.values(), key=lambda s: s[0])[3][0]:
                 self._part("title", None, "")
 
             raw = self.torrent_name[title_start:title_end]
@@ -367,57 +340,46 @@ class PTN(object):
         else:
             self._part("title", None, "")
 
-    def unmatched_list(self, keep_punctuation=True):
+    def unmatched_list(self, keep_punctuation: bool = True) -> List[Tuple[int, int]]:
         self.merge_match_slices()
         unmatched = []
         prev_start = 0
         # A default so the last append won't crash if nothing has matched
         end = len(self.torrent_name)
         # Find all unmatched strings that aren't just punctuation
-        for (start, end) in self.match_slices:
-            if keep_punctuation or not re.match(
-                delimiters + r"*\Z", self.torrent_name[prev_start:start]
-            ):
+        for start, end in self.match_slices:
+            if keep_punctuation or not re.match(rf"{delimiters}*\Z", self.torrent_name[prev_start:start]):
                 unmatched.append((prev_start, start))
             prev_start = end
 
         # Add the last unmatched slice
-        if keep_punctuation or not re.match(
-            delimiters + r"*\Z", self.torrent_name[end:]
-        ):
+        if keep_punctuation or not re.match(rf"{delimiters}*\Z", self.torrent_name[end:]):
             unmatched.append((end, len(self.torrent_name)))
 
         # If nothing matched, assume the whole thing is the title
         if not self.match_slices:
             unmatched.append((0, len(self.torrent_name)))
-
         return unmatched
 
-    def fix_known_exceptions(self):
+    def fix_known_exceptions(self) -> None:
         # Considerations for results that are known to cause issues, such
         # as media with years in them but without a release year.
         for exception in exceptions:
             incorrect_key, incorrect_value = exception["incorrect_parse"]
-            if (
-                self.parts["title"] == exception["parsed_title"]
-                and incorrect_key in self.parts
-            ):
-                if self.parts[incorrect_key] == incorrect_value or (
-                    self.coherent_types and incorrect_value in self.parts[incorrect_key]
-                ):
+            if self.parts["title"] == exception["parsed_title"] and incorrect_key in self.parts:
+                if self.parts[incorrect_key] == incorrect_value or (self.coherent_types and incorrect_value in self.parts[incorrect_key]):
                     self.parts.pop(incorrect_key)
                     self._part("title", None, exception["actual_title"], overwrite=True)
 
-    def get_unmatched(self):
+    def get_unmatched(self) -> str:
         unmatched = ""
-        for (start, end) in self.unmatched_list():
+        for start, end in self.unmatched_list():
             unmatched += self.torrent_name[start:end]
-
         return unmatched
 
-    def clean_unmatched(self):
+    def clean_unmatched(self) -> List[str]:
         unmatched = []
-        for (start, end) in self.unmatched_list():
+        for start, end in self.unmatched_list():
             unmatched.append(self.torrent_name[start:end])
 
         unmatched_clean = []
@@ -429,21 +391,21 @@ class PTN(object):
         filtered = []
         for extra in unmatched_clean:
             # re.fullmatch() is not available in python 2.7, so we manually do it with \Z.
-            if not re.match(
-                r"(?:Complete|Season|Full)?[\]\[,.+\- ]*(?:Complete|Season|Full)?\Z",
-                extra,
-                re.IGNORECASE,
-            ):
+            if not re.match(rf"(?:Complete|Season|Full)?[\]\[,.+\- ]*(?:Complete|Season|Full)?\Z", extra, re.IGNORECASE):
                 filtered.append(extra)
         return filtered
 
     @staticmethod
-    def clean_title(raw_title):
-        cleaned_title = raw_title
-        cleaned_title = cleaned_title.replace(r"[[(]movie[)\]]", "")  # clear movie indication flag
+    def clean_title(raw_title: str) -> str:
+        cleaned_title = raw_title.replace(r"[[(]movie[)\]]", "")  # clear movie indication flag
         cleaned_title = re.sub(patterns["RUSSIAN_CAST_REGEX"], " ", cleaned_title)  # clear russian cast information
         cleaned_title = re.sub(patterns["RELEASE_GROUP_REGEX_START"], r"\1", cleaned_title)  # remove release group markings sections from the start
         cleaned_title = re.sub(patterns["RELEASE_GROUP_REGEX_END"], r"\1", cleaned_title)  # remove unneeded markings section at the end if present
         cleaned_title = re.sub(patterns["ALT_TITLES_REGEX"], "", cleaned_title)  # remove alt language titles
         cleaned_title = re.sub(patterns["NOT_ONLY_NON_ENGLISH_REGEX"], "", cleaned_title)  # remove non english chars if they are not the only ones left
         return cleaned_title
+
+    @staticmethod
+    def _is_overlap(part_slice: Tuple[int, int], match_slice: Tuple[int, int]) -> bool:
+        # Strict smaller/larger than since punctuation can overlap.
+        return (part_slice[0] < match_slice[0] < part_slice[1]) or (part_slice[0] < match_slice[1] < part_slice[1])

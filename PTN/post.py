@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
-# Post-processing functions that run after the main parsing.
+import re
+from typing import List, Dict, Any
+from .extras import link_patterns, complete_series, langs
+from .patterns import episode_name_pattern, patterns, pre_website_encoder_pattern
 
-from . import re
-from .extras import link_patterns, complete_series
-from .patterns import episode_name_pattern, langs, patterns, pre_website_encoder_pattern
+# Post-processing functions that run after the main parsing.
 
 # Before excess functions (before we split what was unmatched in the title into a list).
 # They all take in the parse object and what was unmatched, and must return the latter minus
@@ -12,46 +13,29 @@ from .patterns import episode_name_pattern, langs, patterns, pre_website_encoder
 
 
 # Try and find the episode name.
-def try_episode_name(self, unmatched):
+def try_episode_name(self: Any, unmatched: str) -> str:
     match = re.findall(episode_name_pattern, unmatched)
-    # First we see if there's a match in unmatched, then we look if it's after an episode, a day,
-    # or a year, in the full release title.
     if match:
         match = re.search(
-            "(?:"
-            + link_patterns(patterns["episodes"])
-            + "|"
-            + patterns["day"]
-            + "|"
-            + patterns["year"]
-            + r")[._\-\s+]*("
-            + re.escape(match[0])
-            + ")",
+            rf"(?:{link_patterns(patterns['episodes'])}|{patterns['day']}|{patterns['year']})[._\-\s+]*({re.escape(match[0])})",
             self.torrent_name,
             re.IGNORECASE,
         )
         if match:
-            match_s, match_e = match.start(len(match.groups())), match.end(
-                len(match.groups())
-            )
+            match_s, match_e = match.start(len(match.groups())), match.end(len(match.groups()))
             match = match.groups()[-1]
             self._part("episodeName", (match_s, match_e), self._clean_string(match))
             unmatched = unmatched.replace(match, "")
     return unmatched
 
 
-def try_encoder_before_site(self, unmatched):
+def try_encoder_before_site(self: Any, unmatched: str) -> str:
     match = re.findall(pre_website_encoder_pattern, unmatched.strip())
-
     if match:
         found_match = None
         for m in match:
             full_title_match = re.search(
-                r"[\s\-]("
-                + re.escape(m)
-                + ")(?:\."
-                + link_patterns(patterns["filetype"])
-                + ")?$",
+                rf"[\s\-]({re.escape(m)})(?:\.{link_patterns(patterns['filetype'])})?$",
                 self.torrent_name,
                 re.I,
             )
@@ -61,37 +45,23 @@ def try_encoder_before_site(self, unmatched):
         match = found_match
         if match:
             match_s, match_e = match.start(0), match.end(0)
-            encoder_and_site = list(
-                filter(None, re.split(r"[\-\s\)]", match.groups()[0]))
-            )
+            encoder_and_site = list(filter(None, re.split(r"[\-\s\)]", match.groups()[0])))
             if len(encoder_and_site) == 2:
-                encoder_raw = encoder_and_site[0]
-                site_raw = encoder_and_site[1]
-                self._part(
-                    "encoder",
-                    (match_s, match_e - len(site_raw)),
-                    self._clean_string(encoder_raw),
-                )
-                self._part(
-                    "site",
-                    (match_s + len(encoder_raw), match_e),
-                    self._clean_string(site_raw),
-                    overwrite=False,
-                )
+                encoder_raw, site_raw = encoder_and_site
+                self._part("encoder", (match_s, match_e - len(site_raw)), self._clean_string(encoder_raw))
+                self._part("site", (match_s + len(encoder_raw), match_e), self._clean_string(site_raw), overwrite=False)
                 unmatched = unmatched.replace(match.group(0), "")
-
     return unmatched
 
 
-def remove_complete_series_string(self, unmatched):
+def remove_complete_series_string(self: Any, unmatched: str) -> str:
     if "title" in self.parts:
         complete_series_regex = link_patterns(complete_series)
         complete_match = re.search(complete_series_regex, self.parts["title"], flags=re.I)
         if complete_match:
             title = self.parts["title"]
-            title = title[: complete_match.start()] + title[complete_match.end() :]
+            title = title[:complete_match.start()] + title[complete_match.end():]
             self._part("title", (complete_match.start(), complete_match.end()), self._clean_string(title), overwrite=True)
-
     return unmatched
 
 
@@ -106,7 +76,7 @@ post_processing_before_excess = [
 
 
 # encoder is assumed to be the last element of `excess`, if not already added.
-def try_encoder(self):
+def try_encoder(self: Any) -> None:
     if "excess" not in self.parts or "encoder" in self.parts:
         return
     excess = self.parts["excess"]
@@ -124,8 +94,8 @@ def try_encoder(self):
 
 
 # Split encoder name and site, adding the latter to self.parts
-def try_site(self):
-    if "encoder" not in self.parts or "website" in self.parts:
+def try_site(self: Any) -> None:
+    if "encoder" not in self.parts or "site" in self.parts:
         return
     encoder = self.parts["encoder"]
     if self.coherent_types:
@@ -143,7 +113,7 @@ def try_site(self):
 
 # If there are no languages, but subtitles were matched, we should assume the first lang
 # is the actual languages, and remove it from the subtitles.
-def fix_subtitles_no_language(self):
+def fix_subtitles_no_language(self: Any) -> None:
     if (
         "languages" not in self.parts
         and "subtitles" in self.parts
@@ -157,22 +127,21 @@ def fix_subtitles_no_language(self):
 # Language matches, to support multi-languages releases that have the audio with each
 # languages, will contain audio info (or simply extra strings like 'dub').
 # We remove non-lang matching items from this list.
-def filter_non_languages(self):
+def filter_non_languages(self: Any) -> None:
     if "languages" in self.parts and isinstance(self.parts["languages"], list):
         languages = list(self.parts["languages"])
         for lang in self.parts["languages"]:
             matched = False
-            for (lang_regex, lang_clean) in langs:
+            for lang_regex, lang_clean in langs:
                 if re.match(lang_regex, lang, re.IGNORECASE):
                     matched = True
                     break
             if not matched:
                 languages.remove(lang)
-
         self._part("languages", self.part_slices["languages"], languages, overwrite=True)
 
 
-def is_subtitle_available(self):
+def is_subtitle_available(self: Any) -> None:
     if "subtitles" not in self.parts:
         return
 
@@ -187,9 +156,9 @@ def is_subtitle_available(self):
         self.parts.pop("subtitles")
 
 
-def try_vague_season_episode(self):
+def try_vague_season_episode(self: Any) -> None:
     title = self.parts["title"]
-    m = re.search("(\d{1,2})-(\d{1,2})$", title)
+    m = re.search(r"(\d{1,2})-(\d{1,2})$", title)
     if m:
         if "seasons" not in self.parts and "episodes" not in self.parts:
             new_title = title[: m.start()]
@@ -210,20 +179,13 @@ def try_vague_season_episode(self):
 
 
 # Probably for movies like 1917, where the title is just the year (would need the release year to also be absent)
-def use_year_as_title_if_absent(self):
+def use_year_as_title_if_absent(self: Any) -> None:
     if "year" in self.parts and not self.parts.get("title"):
         self._part("title", None, str(self.parts["year"]), overwrite=True)
         self.parts.pop("year")
 
-
-def remove_empty_parts(self):
-    non_empty_parts = {}
-    for part in self.parts:
-        if self.parts[part] != "":
-            non_empty_parts[part] = self.parts[part]
-
-    self.parts = non_empty_parts
-
+def remove_empty_parts(self: Any) -> None:
+    self.parts = {part: value for part, value in self.parts.items() if value != ""}
 
 post_processing_after_excess = [
     try_encoder,
